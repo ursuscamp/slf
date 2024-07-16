@@ -1,0 +1,13 @@
+[package]
+name = "slf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+clap = { version = "4.5.9", features = ["derive"] }
+dirs = "5.0.1"
+serde = { version = "1.0.204", features = ["derive"] }
+shellexpand = "3.1.0"
+time = { version = "0.3.36", features = ["formatting"] }
+toml = "0.8.14"
