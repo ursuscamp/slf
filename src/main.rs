@@ -1,8 +1,22 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fs::OpenOptions,
+    io::{BufRead, BufReader},
+    path::Path,
+};
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
+use args::{Args, ArgsCommand};
 use clap::Parser;
-use time::{format_description, OffsetDateTime};
+use config::{config_file_path, ConfigFile};
+use query::Query;
+use time::{
+    format_description::{self},
+    OffsetDateTime,
+};
+
+mod args;
+mod config;
+mod query;
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -18,6 +32,28 @@ fn exec(cmd: &ArgsCommand, file: &Path) -> anyhow::Result<()> {
     match cmd {
         ArgsCommand::Init => init_config()?,
         ArgsCommand::Log { log } => log_to_file(log, file)?,
+        ArgsCommand::Query(query) => query_log(query, file)?,
+    }
+    Ok(())
+}
+
+fn query_log(query: &Query, file: &Path) -> anyhow::Result<()> {
+    let file = OpenOptions::new().read(true).open(file)?;
+    let mut counter = 0;
+    let reader = BufReader::new(file).lines();
+    for line in reader {
+        let line = line?;
+        if let Some(line) = query.query_map(&line) {
+            println!("{line}");
+
+            // Check if we have exceeded our limit
+            if let Some(limit) = query.limit {
+                counter += 1;
+                if counter >= limit {
+                    break;
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -45,77 +81,4 @@ fn log_to_file(msg: &str, file: &Path) -> anyhow::Result<()> {
     content.insert_str(0, &fmsg);
     std::fs::write(file, content)?;
     Ok(())
-}
-
-#[derive(Debug, clap::Parser)]
-pub struct Args {
-    /// Log file to use
-    #[clap(short, long)]
-    file: Option<PathBuf>,
-
-    #[clap(subcommand)]
-    command: ArgsCommand,
-}
-
-impl Args {
-    pub fn file(&self, cfg: &ConfigFile) -> PathBuf {
-        if let Some(f) = &self.file {
-            f.clone()
-        } else {
-            cfg.normalized_path()
-        }
-    }
-}
-
-#[derive(Debug, clap::Subcommand)]
-pub enum ArgsCommand {
-    /// Create a default config file
-    Init,
-
-    /// Log a message to the given file
-    Log {
-        /// Message to log
-        log: String,
-    },
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-pub struct ConfigFile {
-    path: PathBuf,
-}
-
-impl ConfigFile {
-    pub fn load() -> anyhow::Result<ConfigFile> {
-        let path = config_file_path()?;
-        let content = std::fs::read_to_string(path)?;
-        let config: ConfigFile = toml::from_str(&content)?;
-        Ok(config)
-    }
-
-    pub fn normalized_path(&self) -> PathBuf {
-        shellexpand::tilde(&self.path.to_string_lossy())
-            .to_string()
-            .into()
-    }
-}
-
-impl Default for ConfigFile {
-    fn default() -> Self {
-        ConfigFile {
-            path: "log.slf".into(),
-        }
-    }
-}
-
-fn config_file_path() -> anyhow::Result<PathBuf> {
-    let folder = if cfg!(windows) {
-        dirs::config_dir()
-            .ok_or_else(|| anyhow!("Config folder missing"))?
-            .join("slf/slf.toml")
-    } else {
-        dirs::home_dir()
-            .ok_or_else(|| anyhow!("Home folder missing"))?
-            .join(".config/slf/slf.toml")
-    };
-    Ok(folder)
 }
