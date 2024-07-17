@@ -39,5 +39,5 @@ The user configuration folders are:
 
 | OS      | Folder                       |
 | ------- | ---------------------------- |
-| Lin/Mac | /home/bob/.config/slc        |
+| Lin/Mac | /home/bob/.config/slf        |
 | Win     | C:\Users\Bob\AppData\Roaming |
